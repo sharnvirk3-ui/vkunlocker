@@ -1,0 +1,119 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // --- Public Content ---
+    match /content/{document=**} {
+      allow read, write: if true;
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Users shouldn't list each other
+      
+      allow create: if isOwner(userId) 
+        && isValidUser(incoming())
+        && incoming().keys().hasAll(['uid', 'email', 'createdAt', 'walletBalance'])
+        && incoming().createdAt == request.time;
+        
+      allow update: if isOwner(userId)
+        && isValidUser(incoming())
+        && (
+          // Action: Profile Update or Migration
+          incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'lastLogin', 'walletBalance'])
+        );
+    }
+
+    // --- Rentals Subcollection ---
+    match /users/{userId}/rentals/{rentalId} {
+      allow read: if isOwner(userId);
+      
+      allow create: if isOwner(userId)
+        && isValidRental(incoming())
+        && incoming().userId == userId
+        && incoming().startTime == request.time;
+        
+      allow update: if false; // Rentals are usually immutable once records are created
+      allow delete: if false; // Keep history
+    }
+
+    // --- Transactions Subcollection ---
+    match /users/{userId}/transactions/{transactionId} {
+      allow read: if isOwner(userId);
+      
+      allow create: if isOwner(userId)
+        && isValidTransaction(incoming())
+        && incoming().userId == userId
+        && incoming().timestamp == request.time;
+        
+      allow update: if false; // Transactions are immutable audit logs
+      allow delete: if false;
+    }
+
+    // --- UTR Claims ---
+    match /users_metadata/system/utrs/{utrId} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn()
+        && utrId.matches('^\\d{12}$')
+        && incoming().utr == utrId
+        && incoming().userId == request.auth.uid
+        && incoming().claimedAt == request.time;
+    }
+
+    // Validation Blueprints
+    function isValidUser(user) {
+      return user.uid == request.auth.uid
+        && user.email is string && user.email.size() < 256
+        && user.get('walletBalance', 0) is number
+        && (user.get('displayName', null) == null || (user.displayName is string && user.displayName.size() < 100))
+        && (user.get('photoURL', null) == null || (user.photoURL is string && user.photoURL.size() < 1000));
+    }
+
+    function isValidRental(rental) {
+      return rental.keys().hasAll(['userId', 'toolName', 'price', 'startTime', 'endTime', 'status'])
+        && rental.userId == request.auth.uid
+        && rental.toolName is string && rental.toolName.size() < 100
+        && rental.price is string && rental.price.size() < 20
+        && rental.status in ['active', 'expired', 'pending']
+        && rental.startTime is timestamp
+        && rental.endTime is timestamp;
+    }
+
+    function isValidTransaction(tx) {
+      return tx.keys().hasAll(['userId', 'amount', 'type', 'description', 'status', 'timestamp'])
+        && tx.userId == request.auth.uid
+        && tx.amount is number
+        && tx.type in ['deposit', 'purchase']
+        && tx.description is string && tx.description.size() < 200
+        && tx.status in ['pending', 'completed', 'failed']
+        && tx.timestamp is timestamp
+        && (tx.get('utr', null) == null || (tx.utr is string && tx.utr.matches('^\\d{12}$')));
+    }
+  }
+}

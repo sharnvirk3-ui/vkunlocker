@@ -1,0 +1,96 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile information, preferences, and wallet balance.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique Firebase Auth ID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User's display name" },
+        "photoURL": { "type": "string", "description": "Profile picture URL" },
+        "walletBalance": { "type": "number", "description": "Current wallet balance in INR" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt", "walletBalance"]
+    },
+    "Rental": {
+      "title": "Tool Rental",
+      "description": "Stores tool rental transactions for users.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "ID of the user who rented the tool" },
+        "toolName": { "type": "string", "description": "Name of the rented software tool" },
+        "price": { "type": "string", "description": "Price paid for the rental" },
+        "duration": { "type": "string", "description": "Duration of rental (e.g., 12h, 24h)" },
+        "status": { "type": "string", "enum": ["active", "expired", "pending"] },
+        "startTime": { "type": "string", "format": "date-time" },
+        "endTime": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "toolName", "price", "startTime", "endTime", "status"]
+    },
+    "Transaction": {
+      "title": "Wallet Transaction",
+      "description": "Records of deposits and tool purchases.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["deposit", "purchase"] },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "utr": { "type": "string", "description": "Optional 12-digit UPI reference number" }
+      },
+      "required": ["userId", "amount", "type", "description", "status", "timestamp"]
+    },
+    "UtrClaim": {
+      "title": "UTR Claim Tracking",
+      "description": "Prevents double-claiming of the same UPI transaction.",
+      "type": "object",
+      "properties": {
+        "utr": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "claimedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["utr", "userId", "amount", "claimedAt"]
+    },
+    "DeveloperProfile": {
+      "title": "Developer Profile",
+      "description": "Public content for the hero section including photo and status.",
+      "type": "object",
+      "properties": {
+        "photo": { "type": "string", "description": "Base64 or URL of the developer photo" },
+        "nameFirst": { "type": "string" },
+        "nameLast": { "type": "string" },
+        "devTitle": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["photo", "nameFirst", "nameLast", "devTitle", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/content/hero": {
+      "schema": "DeveloperProfile",
+      "description": "Publicly accessible hero section configuration."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles."
+    },
+    "/users/{userId}/rentals/{rentalId}": {
+      "schema": "Rental",
+      "description": "Subcollection of tool rentals for a specific user."
+    },
+    "/users/{userId}/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "History of wallet transactions."
+    },
+    "/users_metadata/system/utrs/{utrId}": {
+      "schema": "UtrClaim",
+      "description": "Global tracking of claimed UTRs."
+    }
+  }
+}
